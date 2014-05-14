@@ -2,7 +2,7 @@
 require "logstash/filters/base"
 require "logstash/namespace"
 
-# The mutate filter allows you to do general mutations to fields. You
+# The mutate filter allows you to perform general mutations on fields. You
 # can rename, remove, replace, and modify fields in your events.
 #
 # TODO(sissel): Support regexp replacements like String#gsub ?
@@ -40,7 +40,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   # to help you build a new value from other parts of the event.
   #
   # Example:
-  # 
+  #
   #     filter {
   #       mutate {
   #         replace => [ "message", "%{source_host}: My new message" ]
@@ -52,7 +52,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   # then no action will be taken.
   #
   # Example:
-  # 
+  #
   #     filter {
   #       mutate {
   #         update => [ "sample", "My new message" ]
@@ -64,7 +64,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   # integer. If the field value is an array, all members will be converted.
   # If the field is a hash, no action will be taken.
   #
-  # Valid conversion targets are: integer, float, string
+  # Valid conversion targets are: integer, float, string.
   #
   # Example:
   #
@@ -75,9 +75,9 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   #     }
   config :convert, :validate => :hash
 
-  # Convert a string field by applying a regular expression and a replacement
-  # if the field is not a string, no action will be taken.
-  # 
+  # Convert a string field by applying a regular expression and a replacement.
+  # If the field is not a string, no action will be taken.
+  #
   # This configuration takes an array consisting of 3 elements per
   # field/substitution.
   #
@@ -100,21 +100,21 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   #
   config :gsub, :validate => :array
 
-  # Convert a string to its uppercase equivalent
-  # 
+  # Convert a string to its uppercase equivalent.
+  #
   # Example:
-  # 
+  #
   #     filter {
   #       mutate {
   #         uppercase => [ "fieldname" ]
   #       }
   #     }
   config :uppercase, :validate => :array
-  
-  # Convert a string to its lowercase equivalent
-  # 
+
+  # Convert a string to its lowercase equivalent.
+  #
   # Example:
-  # 
+  #
   #     filter {
   #       mutate {
   #         lowercase => [ "fieldname" ]
@@ -128,44 +128,44 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   # Example:
   #
   #     filter {
-  #       mutate { 
+  #       mutate {
   #          split => ["fieldname", ","]
   #       }
   #     }
   config :split, :validate => :hash
 
-  # Join an array with a separator character, does nothing on non-array fields
+  # Join an array with a separator character. Does nothing on non-array fields.
   #
   # Example:
   #
   #    filter {
-  #      mutate { 
+  #      mutate {
   #        join => ["fieldname", ","]
   #      }
   #    }
   config :join, :validate => :hash
 
-  # Strip whitespaces
+  # Strip whitespace from field. NOTE: this only works on leading and trailing whitespace.
   #
   # Example:
   #
   #     filter {
-  #       mutate { 
+  #       mutate {
   #          strip => ["field1", "field2"]
   #       }
   #     }
   config :strip, :validate => :array
 
-  # merge two fields or arrays or hashes
-  # String fields will be converted in array, so 
-  #  array + string will work
-  #  string + string will result in an 2 entry array in dest_field
-  #  array and hash will not work
+  # Merge two fields of arrays or hashes.
+  # String fields will be automatically be converted into an array, so:
+  #   array + string will work
+  #   string + string will result in an 2 entry array in dest_field
+  #   array and hash will not work
   #
   # Example:
   #
   #     filter {
-  #       mutate { 
+  #       mutate {
   #          merge => ["dest_field", "added_field"]
   #       }
   #     }
@@ -184,7 +184,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
         raise "Bad configuration, aborting."
       end
     end # @convert.each
-    
+
     @gsub_parsed = []
     @gsub.nil? or @gsub.each_slice(3) do |field, needle, replacement|
       if [field, needle, replacement].any? {|n| n.nil?}
@@ -274,7 +274,11 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
   end # def convert
 
   def convert_string(value)
-    return value.to_s
+    # since this is a filter and all inputs should be already UTF-8
+    # we wont check valid_encoding? but just force UTF-8 for
+    # the Fixnum#to_s case which always result in US-ASCII
+    # see https://twitter.com/jordansissel/status/444613207143903232
+    return value.to_s.force_encoding(Encoding::UTF_8)
   end # def convert_string
 
   def convert_integer(value)
@@ -312,7 +316,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
       end
     end # @gsub_parsed.each
   end # def gsub
-  
+
   private
   def uppercase(event)
     @uppercase.each do |field|
@@ -346,7 +350,7 @@ class LogStash::Filters::Mutate < LogStash::Filters::Base
     @split.each do |field, separator|
       if event[field].is_a?(String)
         event[field] = event[field].split(separator)
-      else 
+      else
         @logger.debug("Can't split something that isn't a string",
                       :field => field, :value => event[field])
       end

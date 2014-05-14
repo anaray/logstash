@@ -38,9 +38,9 @@ for such things, that works for me, too.)
 
 ## Download It
 
-[Download logstash-%VERSION%](https://logstash.objects.dreamhost.com/release/logstash-%VERSION%-flatjar.jar)
+[Download logstash-%VERSION%](https://download.elasticsearch.org/logstash/logstash/logstash-%VERSION%.tar.gz)
 
 ## What's next?
 
-Try the [standalone logstash guide](tutorials/getting-started-simple) for a simple
+Try this [guide](tutorials/getting-started-with-logstash) for a simple
 real-world example getting started using logstash.

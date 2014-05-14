@@ -35,6 +35,10 @@ require "set"
 # simply 'duration'. Further, a string "55.3.244.1" might identify the 'client'
 # making a request.
 #
+# For the above example, your grok filter would look something like this:
+#
+# %{NUMBER:duration} %{IP:client}
+#
 # Optionally you can add a data type conversion to your grok pattern. By default
 # all semantics are saved as strings. If you wish to convert a semantic's data type,
 # for example change a string to an integer then suffix it with the target data type.
@@ -78,7 +82,7 @@ require "set"
 # Grok sits on top of regular expressions, so any regular expressions are valid
 # in grok as well. The regular expression library is Oniguruma, and you can see
 # the full supported regexp syntax [on the Onigiruma
-# site](http://www.geocities.jp/kosako3/oniguruma/doc/RE.txt)
+# site](http://www.geocities.jp/kosako3/oniguruma/doc/RE.txt).
 #
 # #### Custom Patterns
 #
@@ -104,7 +108,7 @@ require "set"
 #
 # For example, doing the postfix queue id example as above:
 #
-#     # in ./patterns/postfix 
+#     # contents of ./patterns/postfix:
 #     POSTFIX_QUEUEID [0-9A-F]{10,11}
 #
 # Then use the `patterns_dir` setting in this plugin to tell logstash where
@@ -126,7 +130,7 @@ require "set"
 # * program: postfix/cleanup
 # * pid: 21403
 # * queue_id: BEF25A72965
-# * syslog_message: message-id=<20130101142543.5828399CCAF@mailserver14.example.com
+# * syslog_message: message-id=<20130101142543.5828399CCAF@mailserver14.example.com>
 #
 # The `timestamp`, `logsource`, `program`, and `pid` fields come from the
 # SYSLOGBASE pattern which itself is defined by other patterns.
@@ -168,8 +172,6 @@ class LogStash::Filters::Grok < LogStash::Filters::Base
 
   # Drop if matched. Note, this feature may not stay. It is preferable to combine
   # grok + grep filters to do parsing + dropping.
-  #
-  # requested in: googlecode/issue/26
   config :drop_if_match, :validate => :boolean, :default => false
 
   # Break on first match. The first successful match by grok will result in the
@@ -202,7 +204,7 @@ class LogStash::Filters::Grok < LogStash::Filters::Base
   #       grok {
   #         match => [ 
   #           "message",
-  #           "%{SYSLOGBASE} %{DATA:message}
+  #           "%{SYSLOGBASE} %{DATA:message}"
   #         ]
   #         overwrite => [ "message" ]
   #       }
@@ -214,11 +216,7 @@ class LogStash::Filters::Grok < LogStash::Filters::Base
 
   # Detect if we are running from a jarfile, pick the right path.
   @@patterns_path ||= Set.new
-  if __FILE__ =~ /file:\/.*\.jar!.*/
-    @@patterns_path += ["#{File.dirname(__FILE__)}/../../patterns/*"]
-  else
-    @@patterns_path += ["#{File.dirname(__FILE__)}/../../../patterns/*"]
-  end
+  @@patterns_path += ["#{File.dirname(__FILE__)}/../../../patterns/*"]
 
   public
   def initialize(params)
@@ -240,13 +238,6 @@ class LogStash::Filters::Grok < LogStash::Filters::Base
     @patterns_dir = @@patterns_path.to_a + @patterns_dir
     @logger.info? and @logger.info("Grok patterns path", :patterns_dir => @patterns_dir)
     @patterns_dir.each do |path|
-      # Can't read relative paths from jars, try to normalize away '../'
-      while path =~ /file:\/.*\.jar!.*\/\.\.\//
-        # replace /foo/bar/../baz => /foo/baz
-        path = path.gsub(/[^\/]+\/\.\.\//, "")
-        @logger.debug? and @logger.debug("In-jar path to read", :path => path)
-      end
-
       if File.directory?(path)
         path = File.join(path, "*")
       end
@@ -405,21 +396,6 @@ class LogStash::Filters::Grok < LogStash::Filters::Base
 
   private
   def add_patterns_from_file(path, pile)
-    # Check if the file path is a jar, if so, we'll have to read it ourselves
-    # since libgrok won't know what to do with it.
-    if path =~ /file:\/.*\.jar!.*/
-      File.new(path).each do |line|
-        next if line =~ /^(?:\s*#|\s*$)/
-        # In some cases I have seen 'file.each' yield lines with newlines at
-        # the end. I don't know if this is a bug or intentional, but we need
-        # to chomp it.
-        name, pattern = line.chomp.split(/\s+/, 2)
-        @logger.debug? and @logger.debug("Adding pattern from file", :name => name,
-                                         :pattern => pattern, :path => path)
-        pile.add_pattern(name, pattern)
-      end
-    else
-      pile.add_patterns_from_file(path)
-    end
+    pile.add_patterns_from_file(path)
   end # def add_patterns_from_file
 end # class LogStash::Filters::Grok

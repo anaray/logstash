@@ -8,7 +8,7 @@ require "logstash/namespace"
 # Relevant links:
 #
 # * RabbitMQ: <http://www.rabbitmq.com/>
-# * HotBunnies: <http://hotbunnies.info>
+# * March Hare: <http://rubymarchhare.info>
 # * Bunny: <http://rubybunny.info>
 class LogStash::Outputs::RabbitMQ < LogStash::Outputs::Base
   EXCHANGE_TYPES = ["fanout", "direct", "topic"]
@@ -43,7 +43,7 @@ class LogStash::Outputs::RabbitMQ < LogStash::Outputs::Base
   config :verify_ssl, :validate => :boolean, :default => false
 
   # Enable or disable logging
-  config :debug, :validate => :boolean, :default => false
+  config :debug, :validate => :boolean, :default => false, :deprecated => "Use the logstash --debug flag for this instead."
 
 
 
@@ -77,17 +77,17 @@ class LogStash::Outputs::RabbitMQ < LogStash::Outputs::Base
     super
   end
 
-  # Use HotBunnies on JRuby to avoid IO#select CPU spikes
+  # Use MarchHare on JRuby to avoid IO#select CPU spikes
   # (see github.com/ruby-amqp/bunny/issues/95).
   #
-  # On MRI, use Bunny 0.9.
+  # On MRI, use Bunny.
   #
-  # See http://rubybunny.info and http://hotbunnies.info
+  # See http://rubybunny.info and http://rubymarchhare.info
   # for the docs.
   if RUBY_ENGINE == "jruby"
-    require "logstash/outputs/rabbitmq/hot_bunnies"
+    require "logstash/outputs/rabbitmq/march_hare"
 
-    include HotBunniesImpl
+    include MarchHareImpl
   else
     require "logstash/outputs/rabbitmq/bunny"
 

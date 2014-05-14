@@ -1,21 +1,26 @@
+# encoding: utf-8
+
 require "test_utils"
 require "logstash/filters/dns"
+require "resolv"
 
 describe LogStash::Filters::DNS do
   extend LogStash::RSpec
 
-  describe "dns reverse lookup, replace" do
-    config <<-CONFIG
-      filter {
-        dns {
-          reverse => "host"
-          action => "replace"
-        }
-      }
-    CONFIG
+  before(:all) do
+    begin
+      Resolv.new.getaddress("elasticsearch.com")
+    rescue Errno::ENOENT
+      $stderr.puts("DNS resolver error, no network? mocking resolver")
+      @mock_resolv = true
+    end
+  end
 
-    sample("host" => "199.192.228.250") do
-      insist { subject["host"] } == "carrera.databits.net"
+  before(:each) do
+    if @mock_resolv
+      allow_any_instance_of(Resolv).to receive(:getaddress).with("carrera.databits.net").and_return("199.192.228.250")
+      allow_any_instance_of(Resolv).to receive(:getaddress).with("does.not.exist").and_return(nil)
+      allow_any_instance_of(Resolv).to receive(:getname).with("199.192.228.250").and_return("carrera.databits.net")
     end
   end
 

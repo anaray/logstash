@@ -1,5 +1,6 @@
 # encoding: utf-8
 require "clamp" # gem 'clamp'
+require "logstash/environment"
 require "logstash/errors"
 require "i18n"
 
@@ -10,13 +11,13 @@ class LogStash::Agent < Clamp::Command
 
   option "-e", "CONFIG_STRING",
     I18n.t("logstash.agent.flag.config-string"),
-    :attribute_name => :config_string
+    :default => "", :attribute_name => :config_string
 
   option ["-w", "--filterworkers"], "COUNT",
     I18n.t("logstash.agent.flag.filterworkers"),
     :attribute_name => :filter_workers, :default => 1, &:to_i
 
-  option "--watchdog-timeout", "SECONDS", 
+  option "--watchdog-timeout", "SECONDS",
     I18n.t("logstash.agent.flag.watchdog-timeout"),
     :default => 10, &:to_f
 
@@ -25,7 +26,7 @@ class LogStash::Agent < Clamp::Command
     :attribute_name => :log_file
 
   # Old support for the '-v' flag'
-  option "-v", :flag, 
+  option "-v", :flag,
     I18n.t("logstash.agent.flag.verbosity"),
     :attribute_name => :verbosity, :multivalued => true
 
@@ -85,12 +86,17 @@ class LogStash::Agent < Clamp::Command
     configure
 
     # You must specify a config_string or config_path
-    if config_string.nil? && config_path.nil?
+    if @config_string.nil? && @config_path.nil?
       fail(help + "\n" + I18n.t("logstash.agent.missing-configuration"))
     end
 
+    @config_string = @config_string.to_s
+
     if @config_path
-      @config_string = load_config(@config_path)
+      # Append the config string.
+      # This allows users to provide both -f and -e flags. The combination
+      # is rare, but useful for debugging.
+      @config_string = @config_string + load_config(@config_path)
     else
       # include a default stdin input if no inputs given
       if @config_string !~ /input *{/
@@ -108,12 +114,6 @@ class LogStash::Agent < Clamp::Command
       fail("Configuration problem.")
     end
 
-    # Stop now if we are only asking for a config test.
-    if config_test?
-      report "Configuration OK"
-      return
-    end
-
     # Make SIGINT shutdown the pipeline.
     trap_id = Stud::trap("INT") do
       @logger.warn(I18n.t("logstash.agent.interrupted"))
@@ -127,6 +127,12 @@ class LogStash::Agent < Clamp::Command
 
     pipeline.configure("filter-workers", filter_workers)
 
+    # Stop now if we are only asking for a config test.
+    if config_test?
+      report "Configuration OK"
+      return
+    end
+
     @logger.unsubscribe(stdout_logs) if show_startup_errors
 
     # TODO(sissel): Get pipeline completion status.
@@ -135,6 +141,9 @@ class LogStash::Agent < Clamp::Command
   rescue LogStash::ConfigurationError => e
     @logger.unsubscribe(stdout_logs) if show_startup_errors
     report I18n.t("logstash.agent.error", :error => e)
+    if !config_test?
+      report I18n.t("logstash.agent.configtest-flag-information")
+    end
     return 1
   rescue => e
     @logger.unsubscribe(stdout_logs) if show_startup_errors
@@ -158,7 +167,7 @@ class LogStash::Agent < Clamp::Command
       end
 
       if [:debug].include?(verbosity?) || debug?
-        show_gems 
+        show_gems
       end
     end
   end # def show_version
@@ -173,14 +182,7 @@ class LogStash::Agent < Clamp::Command
   end # def show_version_ruby
 
   def show_version_elasticsearch
-    # Not running in the,jar? assume elasticsearch jars are
-    # in ../../vendor/jar/...
-    if __FILE__ !~ /^(?:jar:)?file:/
-      jarpath = File.join(File.dirname(__FILE__), "../../vendor/jar/elasticsearch*/lib/*.jar")
-      Dir.glob(jarpath).each do |jar|
-        require jar
-      end
-    end
+    LogStash::Environment.load_elasticsearch_jars!
 
     $stdout.write("Elasticsearch: ");
     org.elasticsearch.Version::main([])
@@ -268,10 +270,10 @@ class LogStash::Agent < Clamp::Command
       end
 
       # TODO(sissel): Verify the path looks like the correct form.
-      # aka, there must be file in path/logstash/{filters,inputs,outputs}/*.rb
-      plugin_glob = File.join(path, "logstash", "{inputs,filters,outputs}", "*.rb")
+      # aka, there must be file in path/logstash/{inputs,codecs,filters,outputs}/*.rb
+      plugin_glob = File.join(path, "logstash", "{inputs,codecs,filters,outputs}", "*.rb")
       if Dir.glob(plugin_glob).empty?
-        warn(I18n.t("logstash.agent.configuration.no_plugins_found",
+        @logger.warn(I18n.t("logstash.agent.configuration.no_plugins_found",
                     :path => path, :plugin_glob => plugin_glob))
       end
 
@@ -292,6 +294,10 @@ class LogStash::Agent < Clamp::Command
     config = ""
     Dir.glob(path).sort.each do |file|
       next unless File.file?(file)
+      if file.match(/~$/)
+        @logger.debug("NOT reading config file because it is a temp file", :file => file)
+        next
+      end
       @logger.debug("Reading config file", :file => file)
       config << File.read(file) + "\n"
     end

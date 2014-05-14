@@ -4,12 +4,13 @@ require "logstash/codecs/line"
 require "json"
 
 # This codec will decode streamed JSON that is newline delimited.
-# For decoding JSON payload in the redis input for example, use the json codec instead.
+# For decoding line-oriented JSON payload in the redis or file inputs,
+# for example, use the json codec instead.
 # Encoding will emit a single JSON string ending in a '\n'
 class LogStash::Codecs::JSONLines < LogStash::Codecs::Base
   config_name "json_lines"
 
-  milestone 1
+  milestone 3
 
   # The character encoding used in this codec. Examples include "UTF-8" and
   # "CP1252"
@@ -37,7 +38,7 @@ class LogStash::Codecs::JSONLines < LogStash::Codecs::Base
         yield LogStash::Event.new(JSON.parse(event["message"]))
       rescue JSON::ParserError => e
         @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => data)
-        yield LogStash::Event.new("message" => data)
+        yield LogStash::Event.new("message" => event["message"])
       end
     end
   end # def decode

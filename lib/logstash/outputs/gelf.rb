@@ -2,25 +2,25 @@
 require "logstash/namespace"
 require "logstash/outputs/base"
 
-# GELF output. This is most useful if you want to use logstash
-# to output events to graylog2.
+# This output generates messages in GELF format. This is most useful if you
+# want to use Logstash to output events to Graylog2.
 #
-# More information at <http://www.graylog2.org/about/gelf>
+# More information at <http://graylog2.org/gelf#specs>
 class LogStash::Outputs::Gelf < LogStash::Outputs::Base
 
   config_name "gelf"
   milestone 2
 
-  # graylog2 server address
+  # Graylog2 server IP address or hostname.
   config :host, :validate => :string, :required => true
 
-  # graylog2 server port
+  # Graylog2 server port number.
   config :port, :validate => :number, :default => 12201
 
   # The GELF chunksize. You usually don't need to change this.
   config :chunksize, :validate => :number, :default => 1420
 
-  # Allow overriding of the gelf 'sender' field. This is useful if you
+  # Allow overriding of the GELF `sender` field. This is useful if you
   # want to use something other than the event's source host as the
   # "sender" of an event. A common case for this is using the application name
   # instead of the hostname.
@@ -28,47 +28,50 @@ class LogStash::Outputs::Gelf < LogStash::Outputs::Base
 
   # The GELF message level. Dynamic values like %{level} are permitted here;
   # useful if you want to parse the 'log level' from an event and use that
-  # as the gelf level/severity.
+  # as the GELF level/severity.
   #
   # Values here can be integers [0..7] inclusive or any of
   # "debug", "info", "warn", "error", "fatal" (case insensitive).
   # Single-character versions of these are also valid, "d", "i", "w", "e", "f",
   # "u"
-  # The following additional severity_labels from logstash's  syslog_pri filter
-  # are accepted: "emergency", "alert", "critical",  "warning", "notice", and 
-  # "informational"
+  # The following additional severity\_labels from Logstash's  syslog\_pri filter
+  # are accepted: "emergency", "alert", "critical",  "warning", "notice", and
+  # "informational".
   config :level, :validate => :array, :default => [ "%{severity}", "INFO" ]
 
   # The GELF facility. Dynamic values like %{foo} are permitted here; this
   # is useful if you need to use a value from the event as the facility name.
-  config :facility, :validate => :string, :default => "logstash-gelf"
+  # Should now be sent as an underscored "additional field" (e.g. `\_facility`)
+  config :facility, :validate => :string, :deprecated => true
 
   # The GELF line number; this is usually the line number in your program where
   # the log event originated. Dynamic values like %{foo} are permitted here, but the
   # value should be a number.
-  config :line, :validate => :string
+  # Should now be sent as an underscored "additional field" (e.g. `\_line`).
+  config :line, :validate => :string, :deprecated => true
 
   # The GELF file; this is usually the source code file in your program where
   # the log event originated. Dynamic values like %{foo} are permitted here.
-  config :file, :validate => :string, :default => "%{path}"
+  # Should now be sent as an underscored "additional field" (e.g. `\_file`).
+  config :file, :validate => :string, :deprecated => true
 
-  # Ship metadata within event object? This will cause logstash to ship
-  # any fields in the event (such as those created by grok) in the GELF
-  # messages.
+  # Should Logstash ship metadata within event object? This will cause Logstash
+  # to ship any fields in the event (such as those created by grok) in the GELF
+  # messages. These will be sent as underscored "additional fields".
   config :ship_metadata, :validate => :boolean, :default => true
 
-  # Ship tags within events. This will cause logstash to ship the tags of an
-  # event as the field _tags.
+  # Ship tags within events. This will cause Logstash to ship the tags of an
+  # event as the field `\_tags`.
   config :ship_tags, :validate => :boolean, :default => true
 
-  # Ignore these fields when ship_metadata is set. Typically this lists the
+  # Ignore these fields when `ship_metadata` is set. Typically this lists the
   # fields used in dynamic values for GELF fields.
-  config :ignore_metadata, :validate => :array, :default => [ "@timestamp", "@version", "severity", "source_host", "source_path", "short_message" ]
+  config :ignore_metadata, :validate => :array, :default => [ "@timestamp", "@version", "severity", "host", "source_host", "source_path", "short_message" ]
 
   # The GELF custom field mappings. GELF supports arbitrary attributes as custom
   # fields. This exposes that. Exclude the `_` portion of the field name
   # e.g. `custom_fields => ['foo_field', 'some_value']
-  # sets `_foo_field` = `some_value`
+  # sets `_foo_field` = `some_value`.
   config :custom_fields, :validate => :hash, :default => {}
 
   # The GELF full message. Dynamic values like %{foo} are permitted here.
@@ -141,7 +144,10 @@ class LogStash::Outputs::Gelf < LogStash::Outputs::Base
     m["full_message"] = event.sprintf(@full_message)
 
     m["host"] = event.sprintf(@sender)
-    m["file"] = event.sprintf(@file)
+
+    # deprecated fields
+    m["facility"] = event.sprintf(@facility) if @facility
+    m["file"] = event.sprintf(@file) if @file
     m["line"] = event.sprintf(@line) if @line
     m["line"] = m["line"].to_i if m["line"].is_a?(String) and m["line"] === /^[\d]+$/
 
@@ -155,8 +161,11 @@ class LogStash::Outputs::Gelf < LogStash::Outputs::Base
         name = "_id" if name == "id"  # "_id" is reserved, so use "__id"
         if !value.nil? and !@ignore_metadata.include?(name)
           if value.is_a?(Array)
-            # collapse single-element arrays, otherwise leave as array
-            m["_#{name}"] = (value.length == 1) ? value.first : value
+            m["_#{name}"] = value.join(', ')
+          elsif value.is_a?(Hash)
+            value.each do |hash_name, hash_value|
+              m["_#{name}_#{hash_name}"] = hash_value
+            end
           else
             # Non array values should be presented as-is
             # https://logstash.jira.com/browse/LOGSTASH-113
@@ -175,9 +184,6 @@ class LogStash::Outputs::Gelf < LogStash::Outputs::Base
         m["_#{field_name}"] = field_value unless field_name == 'id'
       end
     end
-
-    # set facility as defined
-    m["facility"] = event.sprintf(@facility)
 
     # Probe severity array levels
     level = nil
