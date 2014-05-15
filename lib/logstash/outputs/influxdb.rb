@@ -16,10 +16,12 @@ class LogStash::Outputs::InfluxDB < LogStash::Outputs::Base
   public
   def register
     require 'influxdb'
+    @influxdb = InfluxDB::Client.new @database, :username => @username, :password => @password
   end
 
   public
   def receive(event)
     return unless output?(event)
+    @influxdb.write_point(@series_name, event.to_hash)
   end
 end
