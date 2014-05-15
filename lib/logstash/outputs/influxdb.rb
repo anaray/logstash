@@ -7,21 +7,26 @@ class LogStash::Outputs::InfluxDB < LogStash::Outputs::Base
   milestone 1
 
   # username to connect to influxdb
+  config :hostname, :validate => :string, :required => :true, :default => "localhost"
   config :username, :validate => :string, :required => :true
   config :password, :validate => :string, :required => :true
   config :database, :validate => :string, :required => :true
   config :series_name, :validate => :string, :required => :true
-
+  config :time_field, :validate => :string
+  config :time_precision, :validate => :string, :default => "m"
 
   public
   def register
     require 'influxdb'
-    @influxdb = InfluxDB::Client.new @database, :username => @username, :password => @password
+    @influxdb = InfluxDB::Client.new @database, :host => @hostname, :username => @username, :password => @password, :time_precision => @time_precision
+    @logger.info("InfluxDB initialized")
   end
 
   public
   def receive(event)
     return unless output?(event)
-    @influxdb.write_point(@series_name, event.to_hash)
+    event_hash = event.to_hash
+    event_hash.store(:time, event_hash[@time_field]) unless @time_field.nil? 
+    @influxdb.write_point(@series_name, event_hash)
   end
 end
