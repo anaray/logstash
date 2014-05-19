@@ -18,13 +18,15 @@ class LogStash::Outputs::InfluxDB < LogStash::Outputs::Base
   public
   def register
     require 'influxdb'
-    @influxdb = InfluxDB::Client.new @database, :host => @hostname, :username => @username, :password => @password, :time_precision => @time_precision
-    @logger.info("InfluxDB initialized")
+    @influxdb = InfluxDB::Client.new
+    @influxdb.create_database(@database)
+    @logger.info("Connection to InfluxDB at #{@hostname} initialized")
   end
 
   public
   def receive(event)
     return unless output?(event)
+    @influxdb = InfluxDB::Client.new @database, :host => @hostname, :username => @username, :password => @password, :time_precision => @time_precision
     event_hash = event.to_hash
     event_hash.store(:time, event_hash[@time_field]) unless @time_field.nil? 
     @influxdb.write_point(@series_name, event_hash)
