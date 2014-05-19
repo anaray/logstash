@@ -8,10 +8,10 @@ class LogStash::Outputs::InfluxDB < LogStash::Outputs::Base
   config_name "influxdb"
   milestone 1
 
-  # hostname where influxdb server is hosted
+  # hostname of the influxdb server
   config :hostname, :validate => :string, :required => :true, :default => "localhost"
 
-  # username to connect to influxDB database
+  # username to connect to the influxDB database
   config :username, :validate => :string, :required => :true
 
   # password of the above username
